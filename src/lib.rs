@@ -1,48 +1,28 @@
+mod config;
+mod score;
+mod types;
+
+use std::collections::HashSet;
+
+use chrono::{DateTime, Utc};
+use config::ToricelliConfig;
 use organic::parser::parse_file;
 use organic::types::{Document, Heading, StandardProperties};
 
-#[derive(Eq, Hash, PartialEq, Clone, Debug)]
-struct ID(String);
+use sqlite::State;
 
-impl From<&str> for ID {
-    fn from(s: &str) -> Self {
-        ID(s.to_string())
+fn fetch_notes(config: ToricelliConfig) {
+    let query = "SELECT id, mtimes, stability, score FROM notes";
+}
+
+fn fetch_notes_from_org_roam_db(config: ToricelliConfig) {
+    let connection = sqlite::open(config.org_roam_db).unwrap();
+    let query = "SELECT * FROM \"main\".\"nodes\"";
+    let mut statement = connection.prepare(query).unwrap();
+    statement.bind((1, 50)).unwrap();
+
+    while let Ok(State::Row) = statement.next() {
+        println!("id = {}", statement.read::<String, _>("id").unwrap());
+        println!("file = {}", statement.read::<i64, _>("file").unwrap());
     }
-}
-
-#[derive(Clone, Debug)]
-struct Note {
-    id: ID,
-    mtimes: Vec<DateTime<Utc>>,
-    stability: f64,
-    links: HashSet<ID>,
-    backlinks: HashSet<ID>,
-    score: f64,
-}
-
-impl Default for Note {
-    fn default() -> Self {
-        Note {
-            id: ID("".to_string()),
-            mtimes: vec![],
-            stability: 1.0,
-            links: HashSet::new(),
-            backlinks: HashSet::new(),
-            score: 0.0,
-        }
-    }
-}
-
-
-use sqlite;
-
-fn fetch_notes () {
-    let note_query = "SELECT id, mtimes, stability, score FROM notes";
-}
-
-
-fn fetch_notes_from_org_roam_db () {
-    let connection = sqlite::open(":memory:").unwrap();
-    let note_query = "SELECT * FROM \"main\".\"nodes\"";
-    
 }
