@@ -34,3 +34,15 @@ impl Default for Note {
 }
 
 
+use sqlite;
+
+fn fetch_notes () {
+    let note_query = "SELECT id, mtimes, stability, score FROM notes";
+}
+
+
+fn fetch_notes_from_org_roam_db () {
+    let connection = sqlite::open(":memory:").unwrap();
+    let note_query = "SELECT * FROM \"main\".\"nodes\"";
+    
+}
