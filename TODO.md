@@ -4,8 +4,11 @@ TODO
 - [ ] independent backing store
   - [ ] set up a backing sqlite db
   - [ ] write test notes to sqlite db successfully
+	- [ ] write test note directory
   - [ ] ingest org-roam notes into our backing store
-  - [ ] test successful idempotent ingestion
+	- [x] test successful idempotent ingestion
+	- [x] read org-roam notes
+	- [ ] serialize into our Note struct
   - [ ] one-time migration of MTIMES from org to our sqlite
 - [ ] directory note source
 - [ ] list-of-links note source

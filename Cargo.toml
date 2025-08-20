@@ -9,5 +9,5 @@ path = "src/lib.rs"
 [dependencies]
 chrono = "0.4.40"
 diesel = "2.2.9"
-organic = "0.1.16"
-sqlite = "0.37.0"
+lexpr = "0.2.7"
+sqlite = {version = "0.37.0", features = ["default"]}

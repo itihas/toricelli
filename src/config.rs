@@ -9,15 +9,20 @@ pub struct ToricelliConfig {
 
 impl ToricelliConfig {
     pub fn from_env() -> Self {
-        let dir = PathBuf::from(
-            env::var("TORICELLI_DIR").unwrap_or_else(|_| "$HOME/.toricelli/".to_string()),
+        let dir = env::var("TORICELLI_DIR").map_or(
+            { PathBuf::from(env::var("HOME").unwrap()).join(".toricelli/") },
+            PathBuf::from,
         );
-        let r = Self {
-            org_roam_db: env::var("TORICELLI_ORG_ROAM_DB")
-                .map_or(PathBuf::from("$HOME/.emacs.d/org-roam.db"),PathBuf::from),
-            db: env::var("TORICELLI_DB").map_or(dir.clone().join("main.db"), PathBuf::from),
-            dir,
-        };
+        let r =
+            Self {
+                org_roam_db: env::var("TORICELLI_ORG_ROAM_DB").map_or(
+                    PathBuf::from(env::var("HOME").unwrap())
+                    .join(".emacs.d/org-roam.db"),
+                    PathBuf::from,
+                ),
+                db: env::var("TORICELLI_DB").map_or(dir.clone().join("main.db"), PathBuf::from),
+                dir,
+            };
         println!("{:?} {:?} {:?}", r.dir, r.db, r.org_roam_db);
         r
     }
