@@ -1,5 +1,5 @@
 use toricelli::config::ToricelliConfig;
-use toricelli::*;
+use toricelli::org_roam_db::fetch_notes_from_org_roam_db;
 
 fn main() {
     println!("Hello, world!");
