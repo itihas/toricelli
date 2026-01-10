@@ -26,29 +26,7 @@ impl Display for ID {
     }
 }
 
-#[derive(Debug)]
-pub struct NoteMap(pub HashMap<ID, Note>);
-
-
-impl std::ops::Deref for NoteMap {
-    type Target = HashMap<ID, Note>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for NoteMap {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-	&mut self.0
-    }
-}
-
-impl NoteMap {
-    pub fn new() -> Self {
-	Self(HashMap::new())
-    }
-}
+pub type NoteMap = HashMap<ID, Note>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Note {

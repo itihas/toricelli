@@ -114,7 +114,7 @@ fn get_links<T: From<String> + Eq + std::hash::Hash>(
 }
 
 pub fn fetch_notes_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) -> Result<NoteMap, Box<dyn Error>> {
-    let mut note_map: NoteMap = NoteMap::new();
+    let mut note_map: NoteMap = HashMap::new();
 
     let connection = &pool.org_roam;
     let nodes_query = "SELECT * FROM \"main\".\"nodes\"";
@@ -160,7 +160,7 @@ pub fn fetch_notes_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliCo
     let outlinks_query = "SELECT dest FROM \"main\".\"links\" WHERE (type = \"http\" OR type=\"https\") AND source = ?";
     let backlinks_query = "SELECT source FROM \"main\".\"links\" WHERE dest = ?";
 
-    for (id, note) in &mut note_map.0 {
+    for (id, note) in &mut note_map {
         note.links = get_links(&connection, links_query, id.0.to_string())?;
         note.backlinks = get_links(&connection, backlinks_query, id.0.to_string())?;
         note.outlinks = get_links(&connection, outlinks_query, id.0.to_string())?;
