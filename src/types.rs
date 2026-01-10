@@ -2,10 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sprs::{CsMat, TriMat};
 use sqlite::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
-
-use crate::config::ToricelliConfig;
 
 /// Sparse weighted graph representation for link analysis.
 /// Supports efficient pagerank, spectral clustering, and other graph algorithms.
@@ -17,6 +15,7 @@ pub struct LinkGraph {
     /// Weighted adjacency matrix in CSR format.
     /// A[i,j] = weight of edge from node i to node j.
     pub adjacency: CsMat<f64>,
+    pub dirty_ids: HashSet<ID>,
 }
 
 impl LinkGraph {
@@ -26,6 +25,7 @@ impl LinkGraph {
             id_to_idx: HashMap::new(),
             idx_to_id: Vec::new(),
             adjacency: CsMat::empty(sprs::CompressedStorage::CSR, 0),
+            dirty_ids: HashSet::new(),
         }
     }
 
@@ -61,6 +61,7 @@ impl LinkGraph {
             id_to_idx,
             idx_to_id,
             adjacency: tri_mat.to_csr(),
+            dirty_ids: HashSet::new(),
         }
     }
 
@@ -118,6 +119,23 @@ impl LinkGraph {
     pub fn edge_count(&self) -> usize {
         self.adjacency.nnz()
     }
+
+    /// Upsert edge into the graph, marking it as dirty.
+    pub fn upsert_link(self: &mut Self, src: ID, dest: ID, weight: f64) {
+        let i = self.register_node(src.clone());
+        let j = self.register_node(dest);
+        self.adjacency.insert(i, j, weight);
+        self.dirty_ids.insert(src);
+    }
+
+    /// Get all dirty IDs
+    pub fn dirty_ids(&self) -> impl Iterator<Item = &ID> {
+        self.dirty_ids.iter()
+    }
+
+    pub(crate) fn clear_dirty(&mut self) {
+        self.dirty_ids = HashSet::new()
+    }
 }
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug, Default, Serialize, Deserialize)]
@@ -137,11 +155,106 @@ impl From<&str> for ID {
 
 impl Display for ID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-	write!(f, "{}", self.0.to_string())
+        write!(f, "{}", self.0.to_string())
     }
 }
 
 pub type NoteMap = HashMap<ID, Note>;
+
+/// Note storage with dirty tracking for efficient flushing.
+/// Tracks which notes have been modified since the last flush.
+pub struct NoteStore {
+    pub notes: NoteMap,
+    dirty: HashSet<ID>,
+}
+
+impl NoteStore {
+    /// Create a new empty NoteStore
+    pub fn new() -> Self {
+        Self {
+            notes: HashMap::new(),
+            dirty: HashSet::new(),
+        }
+    }
+
+    /// Add notes from a NoteMap into an existing NoteStore. Mark all additions as dirty.
+    pub fn upsert_from_notes(&mut self, notes: NoteMap) {
+        self.notes.extend(notes.clone());
+        self.dirty.extend(notes.into_keys());
+    }
+
+    /// Create a NoteStore from an existing NoteMap (all notes start clean)
+    pub fn from_notes(notes: NoteMap) -> Self {
+        Self {
+            notes,
+            dirty: HashSet::new(),
+        }
+    }
+
+    /// Get a reference to a note
+    pub fn get(&self, id: &ID) -> Option<&Note> {
+        self.notes.get(id)
+    }
+
+    /// Get a mutable reference to a note, marking it as dirty
+    pub fn get_mut(&mut self, id: &ID) -> Option<&mut Note> {
+        if self.notes.contains_key(id) {
+            self.dirty.insert(id.clone());
+            self.notes.get_mut(id)
+        } else {
+            None
+        }
+    }
+
+    /// Insert or update a note, marking it as dirty
+    pub fn insert(&mut self, note: Note) {
+        self.dirty.insert(note.id.clone());
+        self.notes.insert(note.id.clone(), note);
+    }
+
+    /// Update a note using a closure, marking it as dirty
+    pub fn update(&mut self, id: &ID, f: impl FnOnce(&mut Note)) {
+        if let Some(note) = self.notes.get_mut(id) {
+            f(note);
+            self.dirty.insert(id.clone());
+        }
+    }
+
+    /// Get all dirty note IDs
+    pub fn dirty_ids(&self) -> impl Iterator<Item = &ID> {
+        self.dirty.iter()
+    }
+
+    /// Get all dirty notes
+    pub fn dirty_notes(&self) -> impl Iterator<Item = &Note> {
+        self.dirty.iter().filter_map(|id| self.notes.get(id))
+    }
+
+    /// Number of dirty notes
+    pub fn dirty_count(&self) -> usize {
+        self.dirty.len()
+    }
+
+    /// Clear dirty flags (call after successful flush)
+    pub fn clear_dirty(&mut self) {
+        self.dirty.clear();
+    }
+
+    /// Check if a specific note is dirty
+    pub fn is_dirty(&self, id: &ID) -> bool {
+        self.dirty.contains(id)
+    }
+
+    /// Number of notes
+    pub fn len(&self) -> usize {
+        self.notes.len()
+    }
+
+    /// Check if empty
+    pub fn is_empty(&self) -> bool {
+        self.notes.is_empty()
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Note {
@@ -150,13 +263,6 @@ pub struct Note {
     pub mtimes: Vec<DateTime<Utc>>,
     pub stability: f64,
     pub score: f64,
-}
-
-
-impl Note {
-    pub fn fetch_notes(_config: ToricelliConfig) -> HashMap<ID, Self> {
-	todo!()
-    }
 }
 
 impl Default for Note {

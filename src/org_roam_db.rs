@@ -1,13 +1,13 @@
-use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use crate::config::ToricelliConfig;
-use crate::types::{Note, NoteMap, LinkGraph, ID};
+use crate::types::{LinkGraph, Note, NoteStore, ID};
 use crate::ConnectionPool;
+use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 
 use lexpr::parse::from_str_elisp;
 use lexpr::Value;
 use sqlite::State;
-use std::error::Error;
 use std::collections::HashMap;
+use std::error::Error;
 
 #[derive(Debug)]
 pub enum PropertyValue {
@@ -93,9 +93,12 @@ impl From<Value> for OrgRoamProperties {
     }
 }
 
-pub fn fetch_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) -> Result<(NoteMap, LinkGraph), Box<dyn Error>> {
-    let mut note_map: NoteMap = HashMap::new();
-
+pub fn fetch_from_org_roam_db(
+    pool: &ConnectionPool,
+    _config: &ToricelliConfig,
+    store: &mut NoteStore,
+    link_graph: &mut LinkGraph,
+) -> Result<(), Box<dyn Error>> {
     let connection = &pool.org_roam;
     let nodes_query = "SELECT * FROM \"main\".\"nodes\"";
     let mut nodes_statement = connection.prepare(nodes_query)?;
@@ -119,13 +122,11 @@ pub fn fetch_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) 
             None => Ok(vec![]),
         }?;
 
-        let id = ID(id);
-        let note = Note {
-            id: id.clone(),
+        store.insert(Note {
+            id: ID(id),
             mtimes,
             ..Default::default()
-        };
-        note_map.insert(id, note);
+        });
     }
 
     // Fetch internal links and build LinkGraph
@@ -133,16 +134,12 @@ pub fn fetch_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) 
     let links_query = "SELECT source, dest FROM \"main\".\"links\" WHERE type = '\"id\"'";
     let links_statement = connection.prepare(links_query)?;
 
-    let edges: Vec<(ID, ID, f64)> = links_statement
-        .into_iter()
-        .map(|row| {
-            let row = row.unwrap();
-            let src = ID::from(row.read::<&str, _>("source").trim_matches('"'));
-            let dest = ID::from(row.read::<&str, _>("dest").trim_matches('"'));
-            (src, dest, 1.0)
-        })
-        .collect();
+    for row in links_statement.into_iter() {
+        let row = row.unwrap();
+        let src = ID::from(row.read::<&str, _>("source").trim_matches('"'));
+        let dest = ID::from(row.read::<&str, _>("dest").trim_matches('"'));
+        link_graph.upsert_link(src, dest, 1.0)
+    }
 
-    let link_graph = LinkGraph::from_edges(edges);
-    Ok((note_map, link_graph))
+    Ok(())
 }

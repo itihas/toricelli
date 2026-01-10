@@ -7,24 +7,29 @@ pub mod types;
 use std::error::Error;
 
 use config::ToricelliConfig;
-use sqlite::{Connection, Value};
-use types::{Note, NoteMap, LinkGraph, ID};
 use serde_json;
+use sqlite::{Connection, Value};
+use types::{LinkGraph, Note, NoteMap, NoteStore, ID};
 
 pub struct ConnectionPool {
     pub main: Connection,
     pub org_roam: Connection,
 }
 
-pub fn fetch_notes(pool: &ConnectionPool, notemap: &mut NoteMap) -> Result<(), Box<dyn Error>> {
+/// Fetch all notes from the database into a NoteStore.
+/// All notes start with clean (not dirty) state.
+pub fn fetch_notes(pool: &ConnectionPool, store: &mut NoteStore) -> Result<(), Box<dyn Error>> {
     let connection = &pool.main;
-    let query = format!("SELECT * from notes;");
+    let query = "SELECT * from notes;";
     let statement = connection.prepare(query)?;
+
+    let mut notes = NoteMap::new();
     for row in statement.into_iter().map(|row| row.unwrap()) {
         let values: Vec<Value> = row.into();
-	let note: Note = values.into();
-        notemap.insert(note.id.clone(), note);
+        let note: Note = values.into();
+        notes.insert(note.id.clone(), note);
     }
+    *store = NoteStore::from_notes(notes);
     Ok(())
 }
 
@@ -52,53 +57,76 @@ pub fn create_resources(
     _config: &ToricelliConfig,
 ) -> Result<(), Box<dyn Error>> {
     let query = "
-         CREATE TABLE notes (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-         CREATE TABLE links (
+         CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+         CREATE TABLE IF NOT EXISTS links (
              src TEXT NOT NULL,
              dest TEXT NOT NULL,
              weight REAL DEFAULT 1.0,
              PRIMARY KEY (src, dest)
          );
-         CREATE INDEX idx_links_dest ON links(dest);
+         CREATE INDEX IF NOT EXISTS idx_links_dest ON links(dest);
 ";
+    println!("{:?}", query);
     let connection = &pool.main;
     connection.execute(query)?;
+    println!("created");
     Ok(())
 }
 
-pub fn read_note(
-    id: ID,
-    pool: &ConnectionPool,
-    _config: &ToricelliConfig,
-) -> Result<Note, Box<dyn Error>> {
+/// Flush only dirty notes from the store to the database.
+/// Uses INSERT OR REPLACE for upsert semantics.
+/// Clears dirty flags on success.
+pub fn flush_notes(pool: &ConnectionPool, store: &mut NoteStore) -> Result<usize, Box<dyn Error>> {
     let connection = &pool.main;
-    let query = format!("SELECT * from notes WHERE id={};", id.to_string());
-    connection
-        .prepare(query)?
-        .into_iter()
-        .try_next()?
-        .map(|v| Ok(v.into()))
-        .unwrap()
-}
+    let query = "INSERT OR REPLACE INTO notes (id, data) VALUES (:id, :data);";
 
-pub fn update_note(
-    note: Note,
-    pool: &ConnectionPool,
-    _config: &ToricelliConfig,
-) -> Result<(), Box<dyn Error>> {
-    let connection = &pool.main;
-    let query = "
-UPDATE notes
-SET data=:data
-WHERE id=:id;
-";
-
-    let data = serde_json::to_string(&note)?;
-    let r = &[
-        (":id", note.id.0.into()),
-        (":data", data.into()),
-    ][..];
+    let mut flushed = 0;
+    connection.execute("BEGIN")?;
     let mut statement = connection.prepare(query)?;
-    statement.bind::<&[(_, sqlite::Value)]>(r)?;
-    Ok(())
+    for note in store.dirty_notes() {
+        let data = serde_json::to_string(&note)?;
+        statement.bind::<&[(_, sqlite::Value)]>(
+            &[(":id", note.id.0.clone().into()), (":data", data.into())][..],
+        )?;
+        statement.next()?;
+        statement.reset()?;
+        flushed += 1;
+    }
+    connection.execute("COMMIT")?;
+
+    store.clear_dirty();
+    Ok(flushed)
+}
+
+
+/// Flush only dirty links from the store to the database.
+/// Uses INSERT OR REPLACE for upsert semantics.
+/// Clears dirty flags on success.
+pub fn flush_links(pool: &ConnectionPool, graph: &mut LinkGraph) -> Result<usize, Box<dyn Error>> {
+    let connection = &pool.main;
+    let query = "INSERT OR REPLACE INTO links (src, dest, weight) VALUES (:src, :dest, :weight);";
+
+    let mut flushed = 0;
+    connection.execute("BEGIN")?;
+    let mut statement = connection.prepare(query)?;
+    for src in graph.dirty_ids() {
+        if let Some(dests) = graph.links(&src) {
+            for (dest, weight) in dests {
+                statement.bind(
+                    &[
+                        (":src", src.0.clone().as_str()),
+                        (":dest", dest.0.clone().as_str()),
+                        (":weight", weight.to_string().as_str()),
+                    ][..],
+                )?;
+                statement.next()?;
+                statement.reset()?;
+            }
+        }
+        flushed += 1;
+    }
+    connection.execute("COMMIT")?;
+
+    graph.clear_dirty();
+    Ok(flushed)
 }
