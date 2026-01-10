@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
-use std::collections::{HashSet, HashMap};
+use sqlite::Value;
+use std::{collections::{HashMap, HashSet}, fmt::Display};
 
 use crate::config::ToricelliConfig;
 
@@ -9,6 +10,12 @@ pub struct ID(pub String);
 impl From<String> for ID {
     fn from(s: String) -> Self {
         ID(s)
+    }
+}
+
+impl Display for ID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	write!(f, "{}", self.0.to_string())
     }
 }
 
@@ -64,5 +71,11 @@ impl Default for Note {
             outlinks: HashSet::new(),
             score: 0.0,
         }
+    }
+}
+
+impl From<Vec<Value>> for Note {
+    fn from(values: Vec<Value>) -> Self {
+        todo!()
     }
 }
