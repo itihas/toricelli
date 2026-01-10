@@ -8,7 +8,7 @@ use std::error::Error;
 
 use config::ToricelliConfig;
 use sqlite::{Connection, Value};
-use types::{Note, NoteMap, ID};
+use types::{Note, NoteMap, LinkGraph, ID};
 use serde_json;
 
 pub struct ConnectionPool {
@@ -28,16 +28,23 @@ pub fn fetch_notes(pool: &ConnectionPool, notemap: &mut NoteMap) -> Result<(), B
     Ok(())
 }
 
-pub fn read_links(pool: &ConnectionPool, notemap: &mut NoteMap) -> Result<(), Box<dyn Error>> {
+pub fn fetch_link_graph(pool: &ConnectionPool) -> Result<LinkGraph, Box<dyn Error>> {
     let connection = &pool.main;
-    let query = "SELECT * from links WHERE src=?;";
+    let query = "SELECT src, dest, weight FROM links;";
+    let statement = connection.prepare(query)?;
 
-    for (id, _note) in notemap.iter_mut() {
-        let mut statement = connection.prepare(query)?;
-        statement.bind((1, id.0.as_str()))?;
-        // TODO: iterate statement results and populate note.links
-    }
-    Ok(())
+    let edges: Vec<(ID, ID, f64)> = statement
+        .into_iter()
+        .map(|row| {
+            let row = row.unwrap();
+            let src = ID::from(row.read::<&str, _>("src"));
+            let dest = ID::from(row.read::<&str, _>("dest"));
+            let weight = row.read::<f64, _>("weight");
+            (src, dest, weight)
+        })
+        .collect();
+
+    Ok(LinkGraph::from_edges(edges))
 }
 
 pub fn create_resources(
@@ -46,7 +53,13 @@ pub fn create_resources(
 ) -> Result<(), Box<dyn Error>> {
     let query = "
          CREATE TABLE notes (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-         CREATE TABLE links (src TEXT, dest TEXT);
+         CREATE TABLE links (
+             src TEXT NOT NULL,
+             dest TEXT NOT NULL,
+             weight REAL DEFAULT 1.0,
+             PRIMARY KEY (src, dest)
+         );
+         CREATE INDEX idx_links_dest ON links(dest);
 ";
     let connection = &pool.main;
     connection.execute(query)?;

@@ -13,3 +13,4 @@ lexpr = "0.2.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sqlite = {version = "0.37.0", features = ["default"]}
+sprs = "0.11"

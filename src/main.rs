@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use toricelli::config::ToricelliConfig;
-use toricelli::org_roam_db::fetch_notes_from_org_roam_db;
+use toricelli::org_roam_db::fetch_from_org_roam_db;
 use toricelli::ConnectionPool;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -11,6 +11,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         main: sqlite::open(&config.db)?,
 	org_roam: sqlite::open(&config.org_roam_db)?
     };
-    fetch_notes_from_org_roam_db(&pool, &config).unwrap();
+    let (notes, graph) = fetch_from_org_roam_db(&pool, &config)?;
+    println!("Loaded {} notes, {} graph nodes, {} edges",
+             notes.len(), graph.node_count(), graph.edge_count());
     Ok(())
 }

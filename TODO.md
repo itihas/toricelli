@@ -20,3 +20,16 @@ TODO
 - [ ] sort test notes
 - [ ] render test notes
 - [ ] successful edge creation
+
+
+
+## Features I'm thinking about:
+
+- weighted links
+- suggested indices/tags
+- new note suggestions (or "suggested stubs")
+  - what should be an index and what should be a new note? These migth be the same thing.
+- ways to introspect on toricelli usage and analyse edit histories "with vs without toricelli"
+- populating edit histories from before the MTIMES metadata by looking at note-wise commit histories. 
+	- this gets complex in my org notebook, where a note isn't always a file but can often be a heading. (it always has the same ID.)
+- "semantic histories," finding paths of keywords, citations, and semantic clusters through the commit histories

@@ -1,12 +1,11 @@
 use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use crate::config::ToricelliConfig;
-use crate::types::{Note, NoteMap, ID};
+use crate::types::{Note, NoteMap, LinkGraph, ID};
 use crate::ConnectionPool;
 
 use lexpr::parse::from_str_elisp;
 use lexpr::Value;
 use sqlite::State;
-use std::collections::HashSet;
 use std::error::Error;
 use std::collections::HashMap;
 
@@ -94,26 +93,7 @@ impl From<Value> for OrgRoamProperties {
     }
 }
 
-fn get_links<T: From<String> + Eq + std::hash::Hash>(
-    connection: &sqlite::Connection,
-    query: &str,
-    bind_id: String,
-) -> Result<HashSet<T>, Box<dyn Error>> {
-    Ok(connection
-        .prepare(query)?
-        .into_iter()
-        .bind((1, bind_id.as_str()))?
-        .map(|row| {
-            row.unwrap()
-                .read::<&str, _>(0)
-                .trim_matches('"')
-                .to_string()
-                .into()
-        })
-        .collect())
-}
-
-pub fn fetch_notes_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) -> Result<NoteMap, Box<dyn Error>> {
+pub fn fetch_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) -> Result<(NoteMap, LinkGraph), Box<dyn Error>> {
     let mut note_map: NoteMap = HashMap::new();
 
     let connection = &pool.org_roam;
@@ -132,7 +112,6 @@ pub fn fetch_notes_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliCo
                 .as_str(),
         )
         .unwrap();
-        // where we left off: writing the From trait for OrgRoamProperties uing lexpr
         let properties_map: OrgRoamProperties = properties.clone().into();
         println!(
             "properties = {:?}, {:?}, {:?}",
@@ -156,16 +135,24 @@ pub fn fetch_notes_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliCo
         note_map.insert(id, note);
     }
 
-    let links_query = "SELECT dest FROM \"main\".\"links\" WHERE type = \"id\" AND source = ?";
-    let outlinks_query = "SELECT dest FROM \"main\".\"links\" WHERE (type = \"http\" OR type=\"https\") AND source = ?";
-    let backlinks_query = "SELECT source FROM \"main\".\"links\" WHERE dest = ?";
+    // Fetch internal links (type="id") and build LinkGraph
+    // org-roam uses weight=1.0 for all links by default
+    let links_query = "SELECT source, dest FROM \"main\".\"links\" WHERE type = \"id\"";
+    let links_statement = connection.prepare(links_query)?;
 
-    for (id, note) in &mut note_map {
-        note.links = get_links(&connection, links_query, id.0.to_string())?;
-        note.backlinks = get_links(&connection, backlinks_query, id.0.to_string())?;
-        note.outlinks = get_links(&connection, outlinks_query, id.0.to_string())?;
-    }
+    let edges: Vec<(ID, ID, f64)> = links_statement
+        .into_iter()
+        .map(|row| {
+            let row = row.unwrap();
+            let src = ID::from(row.read::<&str, _>("source").trim_matches('"'));
+            let dest = ID::from(row.read::<&str, _>("dest").trim_matches('"'));
+            (src, dest, 1.0)
+        })
+        .collect();
+
+    let link_graph = LinkGraph::from_edges(edges);
 
     println!("{:?}", note_map);
-    Ok(note_map)
+    println!("LinkGraph: {} nodes, {} edges", link_graph.node_count(), link_graph.edge_count());
+    Ok((note_map, link_graph))
 }
