@@ -1,12 +1,15 @@
 #![feature(iterator_try_collect)]
 pub mod config;
+pub mod org_file;
 pub mod org_roam_db;
 pub mod score;
 pub mod types;
 
+use std::collections::HashMap;
 use std::error::Error;
 
 use config::ToricelliConfig;
+use org_file::update_file_properties;
 use serde_json;
 use sqlite::{Connection, Value};
 use types::{LinkGraph, Note, NoteMap, NoteStore, ID};
@@ -129,4 +132,81 @@ pub fn flush_links(pool: &ConnectionPool, graph: &mut LinkGraph) -> Result<usize
 
     graph.clear_dirty();
     Ok(flushed)
+}
+
+/// Result of flushing properties to files.
+#[derive(Default)]
+pub struct FlushPropertiesResult {
+    pub updated: usize,
+    pub skipped: usize,
+    pub errors: Vec<(ID, String)>,
+}
+
+/// Flush property changes to org file frontmatter.
+/// Only flushes properties listed in config.flush_properties.
+/// If flush_properties is empty, flushes all Note fields.
+/// Returns the number of files successfully updated.
+pub fn flush_properties_to_files(
+    store: &NoteStore,
+    config: &ToricelliConfig,
+) -> FlushPropertiesResult {
+    let mut result = FlushPropertiesResult::default();
+
+    for note in store.dirty_notes() {
+        let Some(ref file_path) = note.file else {
+            result.skipped += 1;
+            continue;
+        };
+
+        // Build property updates based on config
+        let updates = build_property_updates(note, &config.flush_properties);
+
+        match update_file_properties(file_path, &updates) {
+            Ok(()) => result.updated += 1,
+            Err(e) => {
+                result.errors.push((note.id.clone(), e.to_string()));
+            }
+        }
+    }
+
+    result
+}
+
+/// Build a HashMap of property updates from a Note based on configured properties.
+fn build_property_updates(note: &Note, properties: &[String]) -> HashMap<String, String> {
+    let mut updates = HashMap::new();
+
+    // If properties list is empty, flush all Note fields
+    let flush_all = properties.is_empty();
+
+    for prop in properties.iter().map(|s| s.as_str()).chain(
+        if flush_all {
+            vec!["STABILITY", "SCORE", "MTIMES"].into_iter()
+        } else {
+            vec![].into_iter()
+        },
+    ) {
+        match prop {
+            "STABILITY" => {
+                updates.insert("STABILITY".to_string(), format!("{:.4}", note.stability));
+            }
+            "SCORE" => {
+                updates.insert("SCORE".to_string(), format!("{:.4}", note.score));
+            }
+            "MTIMES" => {
+                if !note.mtimes.is_empty() {
+                    let mtimes_str = note
+                        .mtimes
+                        .iter()
+                        .map(|dt| dt.format("[%Y-%m-%d %a %H:%M]").to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    updates.insert("MTIME".to_string(), mtimes_str);
+                }
+            }
+            _ => {} // Unknown property, skip
+        }
+    }
+
+    updates
 }

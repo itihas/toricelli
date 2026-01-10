@@ -6,7 +6,7 @@ pub struct ToricelliConfig {
     pub db: PathBuf,
     pub org_roam_db: PathBuf,
     /// Properties to flush to org file frontmatter.
-    /// If empty, flushes all Note fields (stability, score).
+    /// If empty, flushes all Note fields (stability, score, mtimes).
     pub flush_properties: Vec<String>,
 }
 
@@ -16,9 +16,10 @@ impl ToricelliConfig {
             PathBuf::from(env::var("HOME").unwrap()).join(".toricelli/"),
             PathBuf::from,
         );
+        // Empty vec means flush all Note fields (stability, score, mtimes)
         let flush_properties = env::var("TORICELLI_FLUSH_PROPERTIES")
             .map(|s| s.split(',').map(|p| p.trim().to_uppercase()).collect())
-            .unwrap_or_else(|_| vec!["STABILITY".to_string(), "SCORE".to_string()]);
+            .unwrap_or_else(|_| vec![]);
 
         let r =
             Self {
@@ -42,7 +43,7 @@ impl ToricelliConfig {
             dir: dir.clone(),
             org_roam_db: PathBuf::from("./testdata/org_roam.db".to_string()),
             db: dir.clone().join("main.db"),
-            flush_properties: vec!["STABILITY".to_string(), "SCORE".to_string()],
+            flush_properties: vec![], // Empty means all fields
         }
     }
 }

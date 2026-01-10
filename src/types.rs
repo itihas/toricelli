@@ -4,6 +4,7 @@ use sprs::{CsMat, TriMat};
 use sqlite::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
+use std::path::PathBuf;
 
 /// Sparse weighted graph representation for link analysis.
 /// Supports efficient pagerank, spectral clustering, and other graph algorithms.
@@ -260,6 +261,8 @@ impl NoteStore {
 pub struct Note {
     #[serde(skip)]
     pub id: ID,
+    #[serde(skip)]
+    pub file: Option<PathBuf>,
     pub mtimes: Vec<DateTime<Utc>>,
     pub stability: f64,
     pub score: f64,
@@ -269,6 +272,7 @@ impl Default for Note {
     fn default() -> Self {
         Note {
             id: ID("".to_string()),
+            file: None,
             mtimes: vec![],
             stability: 1.0,
             score: 0.0,

@@ -2,7 +2,7 @@ use std::error::Error;
 
 use toricelli::config::ToricelliConfig;
 use toricelli::org_roam_db::fetch_from_org_roam_db;
-use toricelli::{ConnectionPool, create_resources, flush_links, flush_notes};
+use toricelli::{ConnectionPool, create_resources, flush_links, flush_notes, flush_properties_to_files};
 use toricelli::types::{LinkGraph, NoteStore};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -23,5 +23,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     flush_notes(&pool, &mut store)?;
     flush_links(&pool, &mut graph)?;
+
+    // Flush properties to org file frontmatter
+    let flush_result = flush_properties_to_files(&store, &config);
+    println!(
+        "Flushed properties to {} files ({} skipped, {} errors)",
+        flush_result.updated,
+        flush_result.skipped,
+        flush_result.errors.len()
+    );
+    for (id, err) in &flush_result.errors {
+        eprintln!("  Error updating {}: {}", id, err);
+    }
+
     Ok(())
 }

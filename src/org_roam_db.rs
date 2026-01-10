@@ -8,6 +8,7 @@ use lexpr::Value;
 use sqlite::State;
 use std::collections::HashMap;
 use std::error::Error;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum PropertyValue {
@@ -105,6 +106,7 @@ pub fn fetch_from_org_roam_db(
 
     while let Ok(State::Row) = nodes_statement.next() {
         let id = nodes_statement.read::<String, _>("id")?;
+        let file = nodes_statement.read::<String, _>("file").ok().map(PathBuf::from);
         let properties = from_str_elisp(
             nodes_statement
                 .read::<String, _>("properties")
@@ -124,6 +126,7 @@ pub fn fetch_from_org_roam_db(
 
         store.insert(Note {
             id: ID(id),
+            file,
             mtimes,
             ..Default::default()
         });

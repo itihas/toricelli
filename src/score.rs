@@ -100,6 +100,7 @@ mod tests {
             mtimes: vec![Utc::now() - TimeDelta::days(1)],
             stability: 1.,
             score: 0.,
+            ..Default::default()
         };
 
         let mut notes: NoteMap = HashMap::new();
