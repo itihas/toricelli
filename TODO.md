@@ -2,13 +2,13 @@ TODO
 ===
 
 - [ ] independent backing store
-  - [ ] set up a backing sqlite db
-  - [ ] write test notes to sqlite db successfully
+  - [x] set up a backing sqlite db
+  - [x] write test notes to sqlite db successfully
 	- [ ] write test note directory
-  - [ ] ingest org-roam notes into our backing store
+  - [x] ingest org-roam notes into our backing store
 	- [x] test successful idempotent ingestion
 	- [x] read org-roam notes
-	- [ ] serialize into our Note struct
+	- [x] serialize into our Note struct
   - [ ] one-time migration of MTIMES from org to our sqlite
 - [ ] directory note source
 - [ ] list-of-links note source
@@ -19,7 +19,7 @@ TODO
 - [ ] render sorted notes to RSS feed
 - [ ] sort test notes
 - [ ] render test notes
-- [ ] successful edge creation
+- [x] successful edge creation
 
 
 
