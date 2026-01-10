@@ -10,7 +10,7 @@ pub struct ToricelliConfig {
 impl ToricelliConfig {
     pub fn from_env() -> Self {
         let dir = env::var("TORICELLI_DIR").map_or(
-            { PathBuf::from(env::var("HOME").unwrap()).join(".toricelli/") },
+            PathBuf::from(env::var("HOME").unwrap()).join(".toricelli/"),
             PathBuf::from,
         );
         let r =

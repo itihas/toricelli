@@ -7,7 +7,9 @@ edition = "2024"
 path = "src/lib.rs"
 
 [dependencies]
-chrono = "0.4.40"
+chrono = { version = "0.4.40", features = ["serde"] }
 diesel = "2.2.9"
 lexpr = "0.2.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 sqlite = {version = "0.37.0", features = ["default"]}

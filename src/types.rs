@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sqlite::Value;
 use std::{collections::{HashMap, HashSet}, fmt::Display};
 
 use crate::config::ToricelliConfig;
 
-#[derive(Eq, Hash, PartialEq, Clone, Debug)]
+#[derive(Eq, Hash, PartialEq, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ID(pub String);
 
 impl From<String> for ID {
@@ -13,15 +14,15 @@ impl From<String> for ID {
     }
 }
 
-impl Display for ID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-	write!(f, "{}", self.0.to_string())
+impl From<&str> for ID {
+    fn from(s: &str) -> Self {
+        ID(s.to_string())
     }
 }
 
-impl Note {
-    pub fn fetch_notes(config: ToricelliConfig) -> HashMap<ID, Self> {
-	todo!()
+impl Display for ID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	write!(f, "{}", self.0.to_string())
     }
 }
 
@@ -49,8 +50,9 @@ impl NoteMap {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Note {
+    #[serde(skip)]
     pub id: ID,
     pub mtimes: Vec<DateTime<Utc>>,
     pub stability: f64,
@@ -58,6 +60,13 @@ pub struct Note {
     pub backlinks: HashSet<ID>,
     pub outlinks: HashSet<String>,
     pub score: f64,
+}
+
+
+impl Note {
+    pub fn fetch_notes(_config: ToricelliConfig) -> HashMap<ID, Self> {
+	todo!()
+    }
 }
 
 impl Default for Note {
@@ -76,6 +85,17 @@ impl Default for Note {
 
 impl From<Vec<Value>> for Note {
     fn from(values: Vec<Value>) -> Self {
-        todo!()
+        // Expects columns: id, data (JSON blob)
+        let id = match &values[0] {
+            Value::String(s) => ID(s.clone()),
+            _ => panic!("Expected string for id"),
+        };
+        let data = match &values[1] {
+            Value::String(s) => s.clone(),
+            _ => panic!("Expected string for data"),
+        };
+        let mut note: Note = serde_json::from_str(&data).expect("Failed to parse JSON data");
+        note.id = id;
+        note
     }
 }

@@ -1,17 +1,14 @@
-
 use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
-use diesel::Connection;
 use crate::config::ToricelliConfig;
 use crate::types::{Note, NoteMap, ID};
 use crate::ConnectionPool;
 
 use lexpr::parse::from_str_elisp;
-use lexpr::{to_vec, Cons, Value};
+use lexpr::Value;
 use sqlite::State;
 use std::collections::HashSet;
 use std::error::Error;
-use std::ops::Deref;
-use std::{collections::HashMap, vec::IntoIter};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum PropertyValue {
@@ -116,7 +113,7 @@ fn get_links<T: From<String> + Eq + std::hash::Hash>(
         .collect())
 }
 
-pub fn fetch_notes_from_org_roam_db(pool: &ConnectionPool, config: &ToricelliConfig) -> Result<NoteMap, Box<dyn Error>> {
+pub fn fetch_notes_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) -> Result<NoteMap, Box<dyn Error>> {
     let mut note_map: NoteMap = NoteMap::new();
 
     let connection = &pool.org_roam;

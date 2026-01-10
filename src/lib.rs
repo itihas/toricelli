@@ -4,12 +4,12 @@ pub mod org_roam_db;
 pub mod score;
 pub mod types;
 
-use std::{error::Error, fmt};
+use std::error::Error;
 
 use config::ToricelliConfig;
-use diesel::connection;
-use sqlite::{Connection, Row, Value};
+use sqlite::{Connection, Value};
 use types::{Note, NoteMap, ID};
+use serde_json;
 
 pub struct ConnectionPool {
     pub main: Connection,
@@ -25,27 +25,28 @@ pub fn fetch_notes(pool: &ConnectionPool, notemap: &mut NoteMap) -> Result<(), B
 	let note: Note = values.into();
         notemap.insert(note.id.clone(), note);
     }
-    return Ok();
+    Ok(())
 }
 
 pub fn read_links(pool: &ConnectionPool, notemap: &mut NoteMap) -> Result<(), Box<dyn Error>> {
     let connection = &pool.main;
     let query = "SELECT * from links WHERE src=?;";
-    let statement = connection.prepare(query)?;
 
-    for (id,note) in notemap.iter_mut() {
-	statement.bind((1, id.to_string()))?;
-	
-    };
+    for (id, _note) in notemap.iter_mut() {
+        let mut statement = connection.prepare(query)?;
+        statement.bind((1, id.0.as_str()))?;
+        // TODO: iterate statement results and populate note.links
+    }
+    Ok(())
 }
 
 pub fn create_resources(
     pool: &ConnectionPool,
-    config: &ToricelliConfig,
+    _config: &ToricelliConfig,
 ) -> Result<(), Box<dyn Error>> {
     let query = "
-         CREATE TABLE notes;
-         CREATE TABLE links;
+         CREATE TABLE notes (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+         CREATE TABLE links (src TEXT, dest TEXT);
 ";
     let connection = &pool.main;
     connection.execute(query)?;
@@ -55,7 +56,7 @@ pub fn create_resources(
 pub fn read_note(
     id: ID,
     pool: &ConnectionPool,
-    config: &ToricelliConfig,
+    _config: &ToricelliConfig,
 ) -> Result<Note, Box<dyn Error>> {
     let connection = &pool.main;
     let query = format!("SELECT * from notes WHERE id={};", id.to_string());
@@ -70,29 +71,19 @@ pub fn read_note(
 pub fn update_note(
     note: Note,
     pool: &ConnectionPool,
-    config: &ToricelliConfig,
+    _config: &ToricelliConfig,
 ) -> Result<(), Box<dyn Error>> {
     let connection = &pool.main;
     let query = "
 UPDATE notes
-SET mtimes=':mtimes',
-    stability=':stability',
-    score=':score',
-    links=':links',
-    backlinks=':backlinks',
-    outlinks=':outlinks'
-WHERE id=':id';
+SET data=:data
+WHERE id=:id;
 ";
 
-    // TODO make these blobs JSON blobs, and write or infer Serdes for them.
+    let data = serde_json::to_string(&note)?;
     let r = &[
         (":id", note.id.0.into()),
-        (":mtimes", format!("{:?}", note.mtimes).into()),
-        (":score", note.score.to_string().into()),
-        (":stability", note.stability.to_string().into()),
-        (":links", format!("{:?}", note.links).into()),
-        (":backlinks", format!("{:?}", note.backlinks).into()),
-        (":outlinks", format!("{:?}", note.outlinks).into()),
+        (":data", data.into()),
     ][..];
     let mut statement = connection.prepare(query)?;
     statement.bind::<&[(_, sqlite::Value)]>(r)?;

@@ -8,8 +8,7 @@ fn standalone_score(n: &mut Note) {
     const C: f64 = -0.5;
     let t = match n.mtimes.last() {
         Some(t) => Utc::now() - t,
-        none => TimeDelta::weeks(300),
-        None => todo!(),
+        None => TimeDelta::weeks(300),
     };
     n.score = (1. + F * (t.num_days() as f64 / n.stability)).powf(C);
 }
@@ -68,6 +67,7 @@ mod tests {
             stability: 1.,
             links: HashSet::new(),
             backlinks: HashSet::new(),
+            outlinks: HashSet::new(),
             score: 0.,
         };
 
