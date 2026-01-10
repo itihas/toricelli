@@ -14,5 +14,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (notes, graph) = fetch_from_org_roam_db(&pool, &config)?;
     println!("Loaded {} notes, {} graph nodes, {} edges",
              notes.len(), graph.node_count(), graph.edge_count());
+
     Ok(())
 }

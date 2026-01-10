@@ -102,9 +102,6 @@ pub fn fetch_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) 
 
     while let Ok(State::Row) = nodes_statement.next() {
         let id = nodes_statement.read::<String, _>("id")?;
-        let file = nodes_statement.read::<String, _>("file")?;
-        println!("id = {}", id);
-        println!("file = {}", file);
         let properties = from_str_elisp(
             nodes_statement
                 .read::<String, _>("properties")
@@ -112,11 +109,7 @@ pub fn fetch_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) 
                 .as_str(),
         )
         .unwrap();
-        let properties_map: OrgRoamProperties = properties.clone().into();
-        println!(
-            "properties = {:?}, {:?}, {:?}",
-            properties_map, properties["FILE"], properties["MTIME"]
-        );
+        let properties_map: OrgRoamProperties = properties.into();
 
         let mtimes = match properties_map.get("MTIME") {
             Some(k) => match k {
@@ -135,9 +128,9 @@ pub fn fetch_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) 
         note_map.insert(id, note);
     }
 
-    // Fetch internal links (type="id") and build LinkGraph
-    // org-roam uses weight=1.0 for all links by default
-    let links_query = "SELECT source, dest FROM \"main\".\"links\" WHERE type = \"id\"";
+    // Fetch internal links and build LinkGraph
+    // org-roam stores link types as quoted strings, e.g. '"id"'
+    let links_query = "SELECT source, dest FROM \"main\".\"links\" WHERE type = '\"id\"'";
     let links_statement = connection.prepare(links_query)?;
 
     let edges: Vec<(ID, ID, f64)> = links_statement
@@ -151,8 +144,5 @@ pub fn fetch_from_org_roam_db(pool: &ConnectionPool, _config: &ToricelliConfig) 
         .collect();
 
     let link_graph = LinkGraph::from_edges(edges);
-
-    println!("{:?}", note_map);
-    println!("LinkGraph: {} nodes, {} edges", link_graph.node_count(), link_graph.edge_count());
     Ok((note_map, link_graph))
 }

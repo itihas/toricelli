@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_standalone_score() {
-        let (mut notes, _) = setup();
+        let (notes, _) = setup();
         if let Some(n) = notes.get(&ID::from("A")) {
             assert_eq!(0.9, standalone_score(n));
         }
