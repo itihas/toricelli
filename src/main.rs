@@ -6,7 +6,7 @@ use toricelli::{ConnectionPool, create_resources, flush_links, flush_notes, flus
 use toricelli::types::{LinkGraph, NoteStore};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let config = ToricelliConfig::from_env();
+    let config = ToricelliConfig::from_str().unwrap();
     let pool = ConnectionPool {
         main: sqlite::open(&config.db)?,
         org_roam: sqlite::open(&config.org_roam_db)?,

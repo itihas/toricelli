@@ -1,6 +1,9 @@
-use std::{env, path::PathBuf};
+use std::{env, error::Error, path::PathBuf};
 
-#[derive(Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default)]
 pub struct ToricelliConfig {
     pub dir: PathBuf,
     pub db: PathBuf,
@@ -10,7 +13,25 @@ pub struct ToricelliConfig {
     pub flush_properties: Vec<String>,
 }
 
+impl Default for ToricelliConfig {
+    fn default() -> Self {
+        let dir = PathBuf::from(env::var("HOME").unwrap()).join(".toricelli/");
+        ToricelliConfig {
+            db: dir.clone().join("main.db"),
+            dir,
+            org_roam_db: PathBuf::from(env::var("HOME").unwrap()).join(".emacs.d/org-roam.db"),
+            flush_properties: vec![],
+        }
+    }
+}
+
 impl ToricelliConfig {
+    pub fn from_str() -> Result<Self, Box<dyn Error>> {
+        let content = std::fs::read_to_string("./config.toml")?;
+        let config: Self = toml::from_str(&content)?;
+        Ok(config)
+    }
+
     pub fn from_env() -> Self {
         let dir = env::var("TORICELLI_DIR").map_or(
             PathBuf::from(env::var("HOME").unwrap()).join(".toricelli/"),
@@ -21,17 +42,15 @@ impl ToricelliConfig {
             .map(|s| s.split(',').map(|p| p.trim().to_uppercase()).collect())
             .unwrap_or_else(|_| vec![]);
 
-        let r =
-            Self {
-                org_roam_db: env::var("TORICELLI_ORG_ROAM_DB").map_or(
-                    PathBuf::from(env::var("HOME").unwrap())
-                    .join(".emacs.d/org-roam.db"),
-                    PathBuf::from,
-                ),
-                db: env::var("TORICELLI_DB").map_or(dir.clone().join("main.db"), PathBuf::from),
-                dir,
-                flush_properties,
-            };
+        let r = Self {
+            org_roam_db: env::var("TORICELLI_ORG_ROAM_DB").map_or(
+                PathBuf::from(env::var("HOME").unwrap()).join(".emacs.d/org-roam.db"),
+                PathBuf::from,
+            ),
+            db: env::var("TORICELLI_DB").map_or(dir.clone().join("main.db"), PathBuf::from),
+            dir,
+            flush_properties,
+        };
         println!("{:?} {:?} {:?}", r.dir, r.db, r.org_roam_db);
         r
     }
