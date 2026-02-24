@@ -9,7 +9,7 @@ TODO
 	- [x] test successful idempotent ingestion
 	- [x] read org-roam notes
 	- [x] serialize into our Note struct
-  - [ ] one-time migration of MTIMES from org to our sqlite
+  - [x] migration of MTIMES from org to our sqlite
 - [ ] directory note source
 - [ ] list-of-links note source
   - [ ] ingest list of links into store
@@ -20,8 +20,16 @@ TODO
 - [ ] sort test notes
 - [ ] render test notes
 - [x] successful edge creation
+- [ ] CLI frontend (subcommands: current, recent, review, visit, import)
 
 
+## Rust learning avenues
+
+- [ ] custom error types (replace `Box<dyn Error>` / `.unwrap()` with `thiserror` or manual impls)
+- [ ] lifetimes (understand where cloning can be replaced with borrowing)
+- [ ] trait design (e.g. shared `DirtyTracked` trait for `NoteStore` and `LinkGraph`)
+- [ ] idiomatic method signatures (`&mut self` vs `self: &mut Self`)
+- [ ] explore the type system more: generics, associated types, trait objects vs enums
 
 ## Features I'm thinking about:
 
