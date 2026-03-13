@@ -6,6 +6,10 @@ edition = "2024"
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = ["cli"]
+cli = ["clap"]
+
 [dependencies]
 chrono = { version = "0.4.40", features = ["serde"] }
 diesel = "2.2.9"
@@ -16,3 +20,4 @@ sqlite = {version = "0.37.0", features = ["default"]}
 sprs = "0.11"
 orgize = "0.10.0-alpha.10"
 toml = "1.0.3"
+clap = { version = "4", features = ["derive"], optional = true }

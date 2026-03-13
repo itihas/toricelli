@@ -164,6 +164,7 @@ pub type NoteMap = HashMap<ID, Note>;
 
 /// Note storage with dirty tracking for efficient flushing.
 /// Tracks which notes have been modified since the last flush.
+#[derive(Clone)]
 pub struct NoteStore {
     pub notes: NoteMap,
     dirty: HashSet<ID>,
@@ -254,6 +255,96 @@ impl NoteStore {
     /// Check if empty
     pub fn is_empty(&self) -> bool {
         self.notes.is_empty()
+    }
+}
+
+// ── Feed types ──────────────────────────────────────────────
+
+/// How to sort a feed.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
+pub enum SortOrder {
+    /// Ascending by score (most due for review first)
+    #[default]
+    ByScore,
+    /// Descending by most recent mtime (recently edited first)
+    ByRecent,
+}
+
+impl Display for SortOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SortOrder::ByScore => write!(f, "by-score"),
+            SortOrder::ByRecent => write!(f, "by-recent"),
+        }
+    }
+}
+
+/// Everything needed to describe a feed request,
+/// regardless of whether it comes from CLI or HTTP.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct FeedRequest {
+    /// How to sort the feed
+    #[cfg_attr(feature = "cli", arg(long, value_enum, default_value_t = SortOrder::ByScore))]
+    pub sort: SortOrder,
+
+    /// Number of notes to display
+    #[cfg_attr(feature = "cli", arg(long, short = 'n', default_value_t = 20))]
+    pub count: usize,
+
+    /// Number of notes to skip
+    #[cfg_attr(feature = "cli", arg(long, default_value_t = 0))]
+    pub offset: usize,
+}
+
+impl Default for FeedRequest {
+    fn default() -> Self {
+        Self {
+            sort: SortOrder::ByScore,
+            count: 20,
+            offset: 0,
+        }
+    }
+}
+
+/// An ordered view into a NoteStore. Holds just IDs — look up
+/// note data from the store at display time.
+pub struct Feed(Vec<ID>);
+
+impl Feed {
+    /// Build a feed by sorting all notes in the store.
+    pub fn build(store: &NoteStore, order: &SortOrder) -> Self {
+        let mut ids: Vec<ID> = store.notes.keys().cloned().collect();
+        match order {
+            SortOrder::ByScore => {
+                ids.sort_by(|a, b| {
+                    let sa = store.get(a).map(|n| n.score).unwrap_or(f64::MAX);
+                    let sb = store.get(b).map(|n| n.score).unwrap_or(f64::MAX);
+                    sa.partial_cmp(&sb).unwrap_or(std::cmp::Ordering::Equal)
+                });
+            }
+            SortOrder::ByRecent => {
+                ids.sort_by(|a, b| {
+                    let ma = store.get(a).and_then(|n| n.mtimes.last());
+                    let mb = store.get(b).and_then(|n| n.mtimes.last());
+                    mb.cmp(&ma) // descending — most recent first
+                });
+            }
+        }
+        Feed(ids)
+    }
+
+    /// Return a page of IDs, clamped to bounds.
+    pub fn page(&self, offset: usize, count: usize) -> &[ID] {
+        let start = offset.min(self.0.len());
+        let end = (offset + count).min(self.0.len());
+        &self.0[start..end]
+    }
+
+    /// Total number of items in the feed.
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 

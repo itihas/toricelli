@@ -7,9 +7,10 @@ pub mod types;
 
 use std::collections::HashMap;
 use std::error::Error;
-
+use chrono::Utc;
 use config::ToricelliConfig;
 use org_file::update_file_properties;
+use score::{pagerank, update_standalone_score};
 use serde_json;
 use sqlite::{Connection, Value};
 use types::{LinkGraph, Note, NoteMap, NoteStore, ID};
@@ -101,7 +102,6 @@ pub fn flush_notes(pool: &ConnectionPool, store: &mut NoteStore) -> Result<usize
     Ok(flushed)
 }
 
-
 /// Flush only dirty links from the store to the database.
 /// Uses INSERT OR REPLACE for upsert semantics.
 /// Clears dirty flags on success.
@@ -132,6 +132,31 @@ pub fn flush_links(pool: &ConnectionPool, graph: &mut LinkGraph) -> Result<usize
 
     graph.clear_dirty();
     Ok(flushed)
+}
+
+/// Record a review of a note: push a new mtime, recompute standalone
+/// score, then run PageRank to propagate the change through the graph.
+/// All mutations go through NoteStore dirty tracking.
+/// Returns Err if the note ID is not found.
+pub fn review(id: &ID, store: &mut NoteStore, graph: &LinkGraph) -> Result<(), Box<dyn Error>> {
+    if store.get(id).is_none() {
+        return Err(format!("note not found: {}", id).into());
+    }
+
+    // 1. Record the review time
+    store.update(id, |note| {
+        note.mtimes.push(Utc::now());
+    });
+
+    // 2. Recompute standalone score for this note
+    store.update(id, |note| {
+        update_standalone_score(note);
+    });
+
+    // 3. Run PageRank to propagate score changes through the graph
+    pagerank(store, graph);
+
+    Ok(())
 }
 
 /// Result of flushing properties to files.
@@ -179,13 +204,11 @@ fn build_property_updates(note: &Note, properties: &[String]) -> HashMap<String,
     // If properties list is empty, flush all Note fields
     let flush_all = properties.is_empty();
 
-    for prop in properties.iter().map(|s| s.as_str()).chain(
-        if flush_all {
-            vec!["STABILITY", "SCORE", "MTIMES"].into_iter()
-        } else {
-            vec![].into_iter()
-        },
-    ) {
+    for prop in properties.iter().map(|s| s.as_str()).chain(if flush_all {
+        vec!["STABILITY", "SCORE", "MTIMES"].into_iter()
+    } else {
+        vec![].into_iter()
+    }) {
         match prop {
             "STABILITY" => {
                 updates.insert("STABILITY".to_string(), format!("{:.4}", note.stability));
